@@ -1,0 +1,132 @@
+---
+title: "Prediction Assignment"
+author: "Neeraj Agarwal"
+date: "July 9, 2019"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Executive Summary
+
+###Background
+Large amount of personal activity data can be collected using devices such as Jawbone Up, Nike FuelBand, and Fitbit. The goal of this project is to use data from accelerometers on the belt, forearm, arm, and dumbbell of 6 participants as they perform barbell lifts correctly and incorrectly 5 different ways.
+
+Six young healthy participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions:
+* Class A - exactly according to the specification
+* Class B - throwing the elbows to the front
+* Class C - lifting the dumbbell only halfway
+* Class D - lowering the dumbbell only halfway
+* Class E - throwing the hips to the front
+
+
+```{r loaddata, echo = TRUE,warning=FALSE,message=FALSE}  
+rm(list = ls()) ## Remove existing files
+Garbage<-gc()
+
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+library(e1071)
+
+set.seed(1)
+
+train.url <-
+        "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test.url <- 
+        "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+path <- paste(getwd(), sep="")
+train.file <- file.path(path, "pml-training.csv")
+test.file <- file.path(path, "pml-testing.csv")
+
+if (!file.exists(train.file)) {
+        download.file(train.url, destfile=train.file)
+}
+
+if (!file.exists(test.file)) {
+        download.file(test.url, destfile=test.file)
+}
+
+train.data <- read.csv(train.file, na.strings=c("NA"," ", "#DIV/0!"))
+test.data <- read.csv(test.file, na.strings=c("NA"," ","#DIV/0!"))
+
+```
+
+## Data Analysis and remove unnecessary columns
+
+```{r dataanalysis, echo=TRUE,warning=FALSE,message=FALSE}
+##head(train.data) 
+##head(test.data)
+dim(train.data)
+dim(test.data)
+
+# Drop colums with NAs
+train.data <- train.data[, colSums(is.na(train.data)) == 0] 
+test.data <- test.data[, colSums(is.na(test.data)) == 0] 
+
+# Drop the first 7 columns as they're unnecessary for predicting.
+train.data <- train.data[,8:length(colnames(train.data))]
+test.data <- test.data[,8:length(colnames(test.data))]
+
+# check the classe with cleaned data set by histogram
+hist(as.numeric(train.data$classe), col = "red", xlab="classe",main = "Classe with Cleaned Data")
+```
+
+### Data Slicing  
+The training data is divided into two sets. This first is a training set with 30% of the data which is used to train the model. The second is a validation set used to assess model performance.
+
+```{r Slice_Data, echo=TRUE,warning=FALSE,message=FALSE}
+
+in.train <- createDataPartition(train.data$classe, p=0.30, list=F)  
+train.data.final <- train.data[in.train, ]
+validate.data.final <- train.data[-in.train, ]
+
+```
+
+
+## Apply Model and Analysis
+
+
+```{r model_analysis, echo=TRUE,warning=FALSE,message=FALSE}
+	
+tr_cntl <- trainControl(method="cv",number=5)
+
+# randomforest model
+model_rf <- train(classe ~ ., data = train.data.final, method="rf",trControl=tr_cntl, prox=TRUE, allowParallel=TRUE)
+
+model_rf
+
+```
+
+#Apply Model Randonforest on the testing data set and check the accuracy
+
+```{r predict, echo = TRUE,warning=FALSE,message=FALSE}
+
+# predict for the training set
+predict_rf <- predict(model_rf, validate.data.final)
+
+# accuracy for training set
+accuracy <- confusionMatrix(validate.data.final$classe, predict_rf)$overall[1]
+
+#Model Accuracy
+accuracy
+
+# predict for the testing set
+test_rf <- predict(model_rf, test.data[, -length(names(test.data))])
+
+#results with test data
+test_rf
+
+##Decision Tree
+treeModel <- rpart(classe ~ ., data=train.data.final, method="class")
+fancyRpartPlot(treeModel)
+
+```
